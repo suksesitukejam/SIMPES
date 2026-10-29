@@ -88,13 +88,15 @@ dialog::backdrop{background:#0008}
 
 <script>
 'use strict';
-const API='https://script.google.com/macros/s/AKfycbwT6ZWqoZwaq-2ljSS8VWBtxlotLUE4F8gRmdvPul-Nkw94NJYXZ8agdXQso4Rkuizm/exec';   // contoh: https://script.google.com/macros/s/XXXX/exec
+const API='https://script.google.com/macros/s/AKfycbwT6ZWqoZwaq-2ljSS8VWBtxlotLUE4F8gRmdvPul-Nkw94NJYXZ8agdXQso4Rkuizm/exec';
 
 /* ---------- util ---------- */
 const P={dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
 box:'<path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',doc:'<path d="M14 3H6v18h12V7l-4-4zM14 3v4h4M9 13h6M9 17h6"/>',
 plus:'<path d="M12 5v14M5 12h14"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16v4z"/>',trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
-stok:'<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>',split:'<path d="M12 3v6M12 9L5 20M12 9l7 11"/>',out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>'};
+stok:'<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>',split:'<path d="M12 3v6M12 9L5 20M12 9l7 11"/>',out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+gedung:'<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/>',
+user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'};
 const I=(n,s=18)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 const $=q=>document.querySelector(q);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -165,7 +167,9 @@ async function enter(){
   $('#who').textContent=S.user.name+' · '+S.user.role;
   if(S.user.mustChange){await forcePwd();const m=await api('master');setMaster(m.master);S.meta=m.meta;}
   const tabs=[['dash','Dashboard','dash'],['brg','Barang','box']];
+  if(S.user.role!=='viewer')tabs.push(['lok','Lokasi','gedung']);
   if(S.user.role!=='viewer')tabs.push(['apv','Persetujuan','check']);
+  if(S.user.role==='admin')tabs.push(['usr','Akun','user']);
   tabs.push(['rpt','Laporan','doc']);
   $('#nav').innerHTML=tabs.map(([k,l,i])=>`<button data-t="${k}">${I(i,20)}<span>${l}</span>${k==='apv'?'<b class="nb" id="nb" hidden></b>':''}</button>`).join('');
   $('#nav').onclick=e=>{const b=e.target.closest('[data-t]');if(b)go(b.dataset.t);};
@@ -173,7 +177,7 @@ async function enter(){
 }
 function bdg(){const b=$('#nb');if(b){b.hidden=!S.pend;b.textContent=S.pend;}}
 function go(t){S.tab=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  ({dash:vDash,brg:vBrg,apv:vApv,rpt:vRpt})[t]().catch(x=>M(`<div class="err">${esc(x.message)}</div>`));scrollTo(0,0);}
+  ({dash:vDash,brg:vBrg,lok:vLokasi,apv:vApv,usr:vUser,rpt:vRpt})[t]().catch(x=>M(`<div class="err">${esc(x.message)}</div>`));scrollTo(0,0);}
 
 /* ---------- dashboard ---------- */
 async function vDash(){
@@ -312,6 +316,138 @@ function csv(){
     ...RP.rows.map(b=>[b.kode,b.nama,b.kategori,b.jumlah,b.satuan,loc(b.ruanganId),b.merk,b.tipe,b.noSeri,b.tahun,b.harga,KL[b.kondisi]||b.kondisi,b.keterangan])];
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(c).join(',')).join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download='inventaris-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+
+/* ---------- lokasi: gedung & ruangan ---------- */
+async function refreshMaster(){const m=await api('master');setMaster(m.master);S.meta=m.meta;}
+async function vLokasi(){
+  M('<div class="cd mu">Memuat…</div>');
+  await refreshMaster();
+  drawLokasi();
+}
+function drawLokasi(){
+  const canE=S.user.role!=='viewer', adm=S.user.role==='admin';
+  const html=S.g.map(g=>{
+    const rooms=S.r.filter(r=>r.gedungId===g.id);
+    const roomList = rooms.length
+      ? '<div style="margin-left:.5rem;border-left:2px solid var(--bd);padding-left:.8rem">'+rooms.map(r=>{
+          const meta = [r.penanggungJawab?'PJ: '+esc(r.penanggungJawab):'', r.lantai?'Lantai '+esc(r.lantai):''].filter(Boolean).join(' · ')||'—';
+          return `<div class="it" style="margin:.4rem 0"><div class="m"><b>${esc(r.kode)} — ${esc(r.nama)}</b><br><small>${meta}</small></div>
+            ${canE?`<div class="ac">
+              <button class="ib" data-a="er" data-id="${r.id}" title="Edit ruangan" aria-label="Edit ruangan">${I('edit')}</button>
+              ${adm?`<button class="ib" data-a="dr" data-id="${r.id}" title="Hapus ruangan" aria-label="Hapus ruangan">${I('trash')}</button>`:''}
+            </div>`:''}</div>`;
+        }).join('')+'</div>'
+      : '<small class="mu" style="margin-left:.5rem">Belum ada ruangan.</small>';
+    return `<div class="cd" style="margin-bottom:.6rem">
+      <div class="it">
+        <div class="m"><b>${esc(g.kode)} — ${esc(g.nama)}</b>${g.keterangan?'<br><small>'+esc(g.keterangan)+'</small>':''}<br><small>${rooms.length} ruangan</small></div>
+        ${canE?`<div class="ac">
+          <button class="ib" data-a="eg" data-id="${g.id}" title="Edit gedung" aria-label="Edit gedung">${I('edit')}</button>
+          ${adm?`<button class="ib" data-a="dg" data-id="${g.id}" title="Hapus gedung" aria-label="Hapus gedung">${I('trash')}</button>`:''}
+          <button class="ib" data-a="ar" data-id="${g.id}" title="Tambah ruangan" aria-label="Tambah ruangan">${I('plus')}</button>
+        </div>`:''}
+      </div>
+      ${roomList}
+    </div>`;
+  }).join('');
+  M(`<div id="lokwrap"><div class="hd"><h2>Gedung & Ruangan</h2>${canE?`<button class="btn" id="addG">${I('plus')} Gedung</button>`:''}</div>
+  ${html||'<div class="cd mu">Belum ada gedung. Tambahkan gedung pertama.</div>'}</div>`);
+  if($('#addG'))$('#addG').onclick=()=>formG();
+  $('#lokwrap').onclick=e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    const a=b.dataset.a, id=b.dataset.id;
+    if(a==='eg')formG(S.g.find(x=>x.id===id));
+    else if(a==='dg')formDelG(id);
+    else if(a==='ar')formR(null,id);
+    else if(a==='er')formR(S.r.find(x=>x.id===id));
+    else if(a==='dr')formDelR(id);
+  };
+}
+function formG(g){
+  const e=!!g;g=g||{kode:'',nama:'',keterangan:''};
+  modal(e?'Edit gedung':'Tambah gedung',
+    fld('Kode gedung*','kode',g.kode,'text','required maxlength=20')+
+    fld('Nama gedung*','nama',g.nama,'text','required maxlength=100')+
+    `<label>Keterangan</label><textarea name="keterangan" rows="2" maxlength="300">${esc(g.keterangan)}</textarea>`,
+    async fd=>{const d=Object.fromEntries(fd);if(e)d.id=g.id;
+      await api('saveGedung',d);await refreshMaster();dlg.close();
+      toast(e?'Gedung diperbarui':'Gedung ditambahkan');drawLokasi();});
+}
+function formR(r,gedungId){
+  const e=!!r;r=r||{gedungId:gedungId||'',kode:'',nama:'',penanggungJawab:'',lantai:''};
+  const gOpts=S.g.map(g=>[g.id,g.kode+' — '+g.nama]);
+  modal(e?'Edit ruangan':'Tambah ruangan',
+    sel('Gedung*','gedungId',gOpts,r.gedungId)+
+    fld('Kode ruangan*','kode',r.kode,'text','required maxlength=30')+
+    fld('Nama ruangan*','nama',r.nama,'text','required maxlength=100')+
+    `<div class="r2"><div>${fld('Penanggung jawab','penanggungJawab',r.penanggungJawab,'text','maxlength=100')}</div><div>${fld('Lantai','lantai',r.lantai,'text','maxlength=20')}</div></div>`,
+    async fd=>{const d=Object.fromEntries(fd);if(e)d.id=r.id;
+      await api('saveRuangan',d);await refreshMaster();dlg.close();
+      toast(e?'Ruangan diperbarui':'Ruangan ditambahkan');drawLokasi();});
+}
+function formDelG(id){
+  const g=S.g.find(x=>x.id===id);
+  modal('Hapus gedung',`<p>Hapus gedung <b>${esc(g.kode)} — ${esc(g.nama)}</b>?</p><p class="mu" style="font-size:13px">Hanya bisa dihapus jika tidak ada ruangan di dalamnya.</p>`,
+    async()=>{await api('deleteGedung',null,{id});await refreshMaster();dlg.close();toast('Gedung dihapus');drawLokasi();},'Hapus');
+}
+function formDelR(id){
+  const r=S.r.find(x=>x.id===id);
+  modal('Hapus ruangan',`<p>Hapus ruangan <b>${esc(r.kode)} — ${esc(r.nama)}</b>?</p><p class="mu" style="font-size:13px">Hanya bisa dihapus jika tidak ada barang di dalamnya.</p>`,
+    async()=>{await api('deleteRuangan',null,{id});await refreshMaster();dlg.close();toast('Ruangan dihapus');drawLokasi();},'Hapus');
+}
+
+/* ---------- akun pengguna (admin) ---------- */
+async function vUser(){
+  M('<div class="cd mu">Memuat…</div>');
+  const r=await api('listUsers');
+  drawUsers(r.users);
+}
+function drawUsers(users){
+  const roleBadge=u=>`<span class="bd" style="background:${u==='admin'?'#dc262622':'#0f766e22'};color:${u==='admin'?'#dc2626':'#0f766e'}">${esc(u)}</span>`;
+  M(`<div class="hd"><h2>Akun pengguna</h2><button class="btn" id="addU">${I('plus')} Akun</button></div>
+  <div id="ulist">${users.map(u=>`
+    <div class="cd it"><div class="m"><b>${esc(u.name)}</b> <small>@${esc(u.username)}</small><br>
+    <small>${u.role==='admin'?'Administrator':u.role==='petugas'?'Petugas':'Viewer'}${u.mustChange?' · wajib ganti password':''}${u.status==='nonaktif'?' · NONAKTIF':''}</small>
+    <div class="tg">${roleBadge(u.role)}${u.status==='nonaktif'?'<span class="bd" style="background:#6b728022;color:#6b7280">nonaktif</span>':''}</div>
+    </div>
+    <div class="ac">
+      <button class="ib" data-a="eu" data-u="${esc(u.username)}" title="Edit akun" aria-label="Edit akun">${I('edit')}</button>
+      <button class="ib" data-a="rp" data-u="${esc(u.username)}" title="Reset password" aria-label="Reset password">${I('stok')}</button>
+      <button class="ib" data-a="du" data-u="${esc(u.username)}" title="Hapus akun" aria-label="Hapus akun">${I('trash')}</button>
+    </div>
+    </div>`).join('')||'<div class="cd mu">Belum ada akun.</div>'}</div>`);
+  $('#addU').onclick=()=>formU();
+  $('#ulist').onclick=e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    const u=users.find(x=>x.username===b.dataset.u),a=b.dataset.a;
+    if(a==='eu')formU(u);else if(a==='rp')formResetPwd(u);else if(a==='du')formDelU(u);
+  };
+}
+function formU(u){
+  const e=!!u;u=u||{username:'',name:'',role:'petugas',status:'aktif'};
+  const roleOpts=[['admin','Admin'],['petugas','Petugas'],['viewer','Viewer']];
+  const body=(e?`<label>Username</label><input value="${esc(u.username)}" disabled>`:fld('Username*','username',u.username,'text','required pattern="[a-z0-9._-]{3,40}" maxlength=40 autocomplete=off'))
+    +fld('Nama lengkap','name',u.name||'','text','maxlength=80')
+    +sel('Role*','role',roleOpts,u.role)
+    +(e?sel('Status','status',[['aktif','Aktif'],['nonaktif','Nonaktif']],u.status||'aktif')
+        :fld('Password awal*','password','','password','required minlength=8 autocomplete=new-password'))
+    +(e?'':'<p class="mu" style="font-size:13px;margin:.4rem 0 0">User akan diminta mengganti password saat login pertama.</p>');
+  modal(e?'Edit akun':'Tambah akun',body,async fd=>{
+    const d=Object.fromEntries(fd);
+    if(e){d.isEdit=true;d.username=u.username;}
+    await api('saveUser',d);dlg.close();toast(e?'Akun diperbarui':'Akun ditambahkan');vUser();
+  });
+}
+function formResetPwd(u){
+  modal('Reset password',`<p>Reset password untuk <b>${esc(u.name)}</b> (@${esc(u.username)})?</p>
+  ${fld('Password sementara*','password','','password','required minlength=8 autocomplete=new-password')}
+  <p class="mu" style="font-size:13px;margin:.4rem 0 0">User wajib mengganti password saat login berikutnya.</p>`,
+  async fd=>{await api('resetPassword',{username:u.username,password:fd.get('password')});dlg.close();toast('Password direset');vUser();},'Reset');
+}
+function formDelU(u){
+  modal('Hapus akun',`<p>Hapus akun <b>${esc(u.name)}</b> (@${esc(u.username)})?</p><p class="mu" style="font-size:13px">Tindakan ini tidak bisa dibatalkan. Minimal harus ada 1 admin aktif.</p>`,
+  async()=>{await api('deleteUser',null,{id:u.username});dlg.close();toast('Akun dihapus');vUser();},'Hapus');
 }
 
 /* ---------- mulai ---------- */
