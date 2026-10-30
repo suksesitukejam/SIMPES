@@ -93,7 +93,7 @@ video{width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;object-fit:
 
 <script>
 'use strict';
-const API='https://script.google.com/macros/s/AKfycbwT6ZWqoZwaq-2ljSS8VWBtxlotLUE4F8gRmdvPul-Nkw94NJYXZ8agdXQso4Rkuizm/exec';   // contoh: https://script.google.com/macros/s/XXXX/exec
+const API='GANTI_DENGAN_URL_WEB_APP';   // contoh: https://script.google.com/macros/s/XXXX/exec
 
 /* ---------- util ---------- */
 const P={dash:'<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>',
@@ -519,6 +519,79 @@ function openHash(){const h=location.hash;if(/^#[kr]=/.test(h)){history.replaceS
     if(!me.user.mustChange){const m=await api('master');setMaster(m.master);}
     await enter();}
   catch(x){if(x.net){toast(x.message,1);}logout(!x.net);}
+})();
+</script>
+<style>
+:root{color-scheme:dark;--bg:#070b14;--sf:#0e1524;--tx:#e8f1ff;--mu:#8a9bb8;--bd:#1c2a45;--p:#22d3ee;--p2:#a78bfa;--pt:#001018;--pl:#0f2a3d;--sh:0 0 0 1px #22d3ee14,0 8px 30px #22d3ee12}
+body{background:radial-gradient(900px 500px at 85% -10%,#a78bfa26,transparent),radial-gradient(700px 400px at -5% 10%,#22d3ee1a,transparent),var(--bg);background-attachment:fixed}
+.cd{background:linear-gradient(160deg,#111c33,#0a111f);transition:box-shadow .2s}
+.cd:hover{box-shadow:0 0 0 1px #22d3ee55,0 0 26px #22d3ee22}
+.btn{background:linear-gradient(90deg,var(--p),var(--p2));box-shadow:0 0 16px #22d3ee40}
+.btn.g{box-shadow:none}.btn.d{background:var(--rd)}
+.st b{background:linear-gradient(90deg,#22d3ee,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top,nav{background:#0b1322cc;backdrop-filter:blur(14px)}
+nav button.on{text-shadow:0 0 12px #22d3ee}
+.tr i{box-shadow:0 0 10px currentColor}
+@media(prefers-reduced-motion:reduce){.cd{transition:none}}
+</style>
+<script>
+(()=>{
+'use strict';
+P.pjm='<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>';
+const PS={diajukan:'#f59e0b',dipinjam:'#22d3ee',ditolak:'#ef4444',dikembalikan:'#10b981'};
+const hari=d=>d?new Date(d+'T00:00').toLocaleDateString('id-ID',{weekday:'long'}):'';
+const tg=(d,j)=>d?new Date(d+'T00:00').toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'})+(j?' '+j:''):'';
+const sb=s=>`<span class="bd" style="background:${PS[s]}26;color:${PS[s]}">${esc(s)}</span>`;
+const late=x=>x.status==='dipinjam'&&new Date(x.tglSelesai+'T'+(x.jamSelesai||'23:59'))<new Date();
+
+/* form pengajuan (login & publik) */
+async function form(pub){
+  const o=(await api('pinjamOpsi')).opsi,today=new Date().toISOString().slice(0,10);
+  const items=t=>(t==='gedung'?o.gedung:o.barang).map(x=>[x.id,x.nama+(t==='barang'?` (tersedia ${x.jumlah} ${x.satuan})`:'')]);
+  modal('Ajukan peminjaman',
+    fld('Nama peminjam*','peminjam','','text','required maxlength=80')+fld('Bagian / unit*','bagian','','text','required maxlength=80')+fld('Agenda / acara*','agenda','','text','required maxlength=150')
+    +sel('Yang dipinjam','tipe',[['gedung','Gedung / ruangan'],['barang','Barang']],'gedung')
+    +'<label>Pilihan*</label><select name="refId" id="pr_ref" required></select><div id="pr_j" hidden>'+fld('Jumlah','jumlah',1,'number','min=1 step=1 inputmode=numeric')+'</div>'
+    +`<div class="r2"><div>${fld('Tanggal mulai*','tglMulai',today,'date','required')}</div><div>${fld('Jam mulai*','jamMulai','08:00','time','required')}</div><div>${fld('Sampai tanggal*','tglSelesai',today,'date','required')}</div><div>${fld('Sampai jam*','jamSelesai','16:00','time','required')}</div></div><small class="mu" id="pr_h"></small>`,
+    async fd=>{const d=Object.fromEntries(fd);d.hari=hari(d.tglMulai);
+      if(d.tglSelesai+d.jamSelesai<=d.tglMulai+d.jamMulai)throw new Error('Waktu selesai harus setelah waktu mulai');
+      await api('pinjamAjukan',d);dlg.close();toast('Pengajuan terkirim, menunggu persetujuan');if(!pub&&S.tab==='pjm')vPjm();},'Kirim pengajuan');
+  const f=dlg.querySelector('form'),sync=()=>{$('#pr_ref').innerHTML=opt(items(f.tipe.value));$('#pr_j').hidden=f.tipe.value!=='barang';$('#pr_h').textContent=hari(f.tglMulai.value);};
+  f.tipe.onchange=sync;f.tglMulai.onchange=sync;sync();
+}
+function decide(x,ok){
+  modal(ok?'Setujui peminjaman':'Tolak peminjaman',`<p class="mu" style="margin:0">${esc(x.nama)} · ${esc(x.peminjam)}</p>`+fld('Catatan (opsional)','note','','text','maxlength=200'),
+    async fd=>{await api('pinjamDecide',{id:x.id,approve:ok,note:fd.get('note')});dlg.close();toast(ok?'Disetujui':'Ditolak');vPjm();},ok?'Setujui':'Tolak');
+}
+function kembali(x){
+  modal('Pengembalian: '+x.nama,sel('Kondisi setelah dipinjam','kondisi',['baik','rusak_ringan','rusak_berat','hilang'].map(k=>[k,KL[k]]),'baik')+`<label>Catatan kondisi</label><textarea name="catatan" rows="3" maxlength="300" placeholder="Mis. layar tergores, kabel hilang satu"></textarea>`,
+    async fd=>{await api('pinjamKembali',{id:x.id,kondisi:fd.get('kondisi'),catatan:fd.get('catatan')});dlg.close();toast('Pengembalian dicatat');vPjm();},'Catat pengembalian');
+}
+
+/* halaman peminjaman */
+async function vPjm(){
+  M('<div class="cd mu">Memuat…</div>');
+  const r=await api('pinjamList',{}),e=canE();S.pj=r.items;
+  M(`<div class="hd"><h2>Peminjaman</h2><button class="btn" data-j="new">${I('plus')} Ajukan</button></div>`+
+  (r.items.map(x=>`<div class="cd it"><div class="m"><b>${esc(x.nama)}</b> <span class="bd">${x.tipe==='barang'?num(x.jumlah)+' unit':'Gedung'}</span><br>
+  <small>${esc(x.peminjam)} · ${esc(x.bagian)} · ${esc(x.agenda)}</small><br><small>${esc(x.hari)}, ${tg(x.tglMulai,x.jamMulai)} → ${tg(x.tglSelesai,x.jamSelesai)}</small>
+  ${x.kondisiKembali?`<br><small>Kondisi kembali: <b>${esc(KL[x.kondisiKembali]||x.kondisiKembali)}</b>${x.catatanKembali?' · '+esc(x.catatanKembali):''}</small>`:''}
+  <div class="tg">${sb(x.status)}${late(x)?'<span class="bd" style="background:#ef444430;color:#ef4444">Terlambat</span>':''}${x.source==='publik'?'<span class="bd">via formulir publik</span>':''}</div></div>
+  <div class="ac">${e&&x.status==='diajukan'?`<button class="btn" data-j="ok" data-id="${x.id}">Setujui</button><button class="btn g" data-j="no" data-id="${x.id}">Tolak</button>`:''}${e&&x.status==='dipinjam'?`<button class="btn" data-j="ret" data-id="${x.id}">Dikembalikan</button>`:''}</div></div>`).join('')||'<div class="cd mu">Belum ada peminjaman.</div>'));
+  $('#main').onclick=ev=>{const b=ev.target.closest('[data-j]');if(!b)return;const a=b.dataset.j,x=S.pj.find(i=>i.id===b.dataset.id);
+    (a==='new'?form(0):a==='ok'?decide(x,true):a==='no'?decide(x,false):kembali(x));};
+}
+
+/* kaitkan ke aplikasi */
+const og=go;go=function(t){if(t!=='pjm')return og(t);S.tab=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));vPjm().catch(x=>M(`<div class="err">${esc(x.message)}</div>`));scrollTo(0,0);};
+const oe=enter;enter=async function(){await oe();$('#nav [data-more]').insertAdjacentHTML('beforebegin',`<button data-t="pjm">${I('pjm',20)}<span>Peminjaman</span></button>`);};
+const od=vDash;vDash=async function(){await od();
+  try{const r=await api('pinjamList',{aktif:1}),a=r.items.filter(x=>x.status==='dipinjam'),w=r.items.length-a.length;
+    $('#main .w').insertAdjacentHTML('beforeend',`<div class="cd" style="margin-top:.75rem"><h3>Sedang dipinjam (${a.length})${w?` · ${w} menunggu persetujuan`:''}</h3>${a.map(x=>`<div class="it"><span>${esc(x.nama)}${x.tipe==='barang'?' ×'+num(x.jumlah):''}<br><small>${esc(x.peminjam)} · ${esc(x.bagian)} · ${esc(x.agenda)}</small></span><small style="text-align:right;white-space:nowrap">sampai<br>${tg(x.tglSelesai,x.jamSelesai)}${late(x)?'<br><b style="color:var(--rd)">Terlambat</b>':''}</small></div>`).join('')||'<span class="mu">Tidak ada gedung atau barang yang sedang dipinjam.</span>'}</div>`);
+  }catch(e){}};
+$('.lc').insertAdjacentHTML('beforeend','<button type="button" class="btn g" id="pub" style="width:100%;margin-top:.7rem">Ajukan peminjaman tanpa login</button>');
+$('#pub').onclick=()=>form(1).catch(x=>toast(x.message,1));
+if(location.hash==='#pinjam'&&!stor().getItem('sp_tok'))$('#pub').click();
 })();
 </script>
 </body>
