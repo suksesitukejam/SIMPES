@@ -539,7 +539,7 @@ function openHash(){const h=location.hash;if(/^#[kr]=/.test(h)){history.replaceS
 
 /* ---------- mulai ---------- */
 (async()=>{
-  const t=stor().getItem('sp_tok');if(!t||API.startsWith('GANTI'))return;
+  const t=stor().getItem('sp_tok');if(!t||API.startsWith('GANTI')||location.hash==='#pinjam')return;
   S.tok=t;$('#lg').hidden=true;$('#app').hidden=false;S.tab='dash';skDash();
   try{const b=await api('boot');S.user=b.user;S.meta=b.meta;setMaster(b.master);S.dash=b.dash;await enter();}
   catch(x){if(x.net){M(`<div class="cd" style="text-align:center"><p>${esc(x.message)}</p><button class="btn" onclick="location.reload()">Coba lagi</button></div>`);}else logout(1);}
@@ -642,7 +642,16 @@ const og=go;go=function(t){if(t!=='pjm')return og(t);S.tab=t;document.querySelec
 const oe=enter;enter=async function(){await oe();$('#nav [data-more]').insertAdjacentHTML('beforebegin',`<button data-t="pjm">${I('pjm',20)}<span>Peminjaman</span></button>`);};
 $('.lc').insertAdjacentHTML('beforeend','<button type="button" class="btn g" id="pub" style="width:100%;margin-top:.7rem">Ajukan peminjaman tanpa login</button>');
 $('#pub').onclick=()=>form(1).catch(x=>toast(x.message,1));
-if(location.hash==='#pinjam'&&!stor().getItem('sp_tok'))$('#pub').click();
+if(location.hash==='#pinjam'){   /* halaman publik: tanpa login, tanpa menu aplikasi */
+  $('#lg').hidden=false;$('#app').hidden=true;
+  $('.lc').innerHTML=`<img src="logo.jpg" alt="Logo Darul Arqam"><h1>Peminjaman</h1><div class="mu">Gedung & barang Pondok Darul Arqam</div>
+  <p class="mu" style="font-size:14px;margin:1rem 0">Isi formulir, lalu tunggu persetujuan petugas. Tidak perlu akun.</p>
+  <button type="button" class="btn" id="pub" style="width:100%">Ajukan peminjaman</button>
+  <p style="margin:1rem 0 0;font-size:13px"><a href="#" id="stf" style="color:var(--p)">Masuk sebagai petugas</a></p>`;
+  $('#pub').onclick=()=>form(1).catch(x=>toast(x.message,1));
+  $('#stf').onclick=e=>{e.preventDefault();history.replaceState(null,'',location.pathname+location.search);location.reload();};
+  $('#pub').click();
+}
 })();
 </script>
 </body>
