@@ -119,7 +119,7 @@ const M=h=>$('#main').innerHTML='<div class="w">'+h+'</div>';
 let tt;function toast(m,e){const t=$('#toast');t.textContent=m;t.className=e?'e on':'on';clearTimeout(tt);tt=setTimeout(()=>t.className='',e?5000:2600);}
 
 /* ---------- API ---------- */
-const RD=/^(boot|me|master|dashboard|listBarang|rekap|listApprovals|listPengadaan|pinjamList|pinjamOpsi)$/;
+const RD=/^(boot|me|master|dashboard|listBarang|rekap|listApprovals|listPengadaan|pinjamList|pinjamOpsi|listPenghapusan)$/;
 async function api(action,data,extra,again){
   let res;const rd=RD.test(action),ac=new AbortController(),to=rd?setTimeout(()=>ac.abort(),40000):0;
   try{res=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token:S.tok,data,...extra}),signal:ac.signal}).then(r=>r.json());}
@@ -175,7 +175,7 @@ async function enter(){
   if(S.user.mustChange){await forcePwd();const m=await api('master');setMaster(m.master);S.meta=m.meta;}
   const tabs=[['dash','Dashboard','dash'],['brg','Aset','box']];
   if(S.user.role!=='viewer')tabs.push(['apv','Persetujuan','check'],['pgd','Pengadaan','cart',1],['kel','Data Master','cog',1]);
-  tabs.push(['rpt','Laporan & QR','doc',1]);
+  tabs.push(['hps','Penghapusan','arch',1],['rpt','Laporan & QR','doc',1]);
   $('#nav').innerHTML=tabs.map(([k,l,i,x])=>`<button data-t="${k}" ${x?'class="x"':''}>${I(i,20)}<span>${l}</span>${k==='apv'?'<b class="nb" id="nb" hidden></b>':''}</button>`).join('')+`<button class="more" data-more>${I('menu',20)}<span>Lainnya</span></button>`;
   $('#nav').onclick=e=>{const b=e.target.closest('[data-t],[data-more]');if(!b)return;
     if(b.dataset.more!==undefined){dlg.innerHTML=`<h3>Menu</h3>${tabs.filter(t=>t[3]).map(t=>`<button type="button" class="btn g" style="width:100%;justify-content:flex-start;margin-bottom:.4rem" data-go="${t[0]}">${I(t[2])} ${t[1]}</button>`).join('')}<button type="button" class="btn g" style="width:100%" data-x>Tutup</button>`;
@@ -185,7 +185,7 @@ async function enter(){
 }
 function bdg(){const b=$('#nb');if(b){b.hidden=!S.pend;b.textContent=S.pend;}}
 function go(t){S.tab=t;document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-  ({dash:vDash,brg:vBrg,apv:vApv,pgd:vPgd,kel:vKel,rpt:vRpt})[t]().catch(x=>M(`<div class="err">${esc(x.message)}</div>`));scrollTo(0,0);}
+  ({dash:vDash,brg:vBrg,apv:vApv,pgd:vPgd,kel:vKel,rpt:vRpt,hps:vHps})[t]().catch(x=>M(`<div class="err">${esc(x.message)}</div>`));scrollTo(0,0);}
 
 /* ---------- dashboard ---------- */
 Object.assign(P,{pjm:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',warn:'<path d="M12 3l10 18H2L12 3zM12 10v4M12 17.5v.5"/>',coin:'<circle cx="12" cy="12" r="9"/><path d="M9 9.5c0-1 1.3-1.5 3-1.5s3 .6 3 1.8-1.3 1.5-3 1.7-3 .6-3 1.8 1.3 1.7 3 1.7 3-.5 3-1.5M12 6v2M12 16v2"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',build:'<path d="M4 21V7l8-4 8 4v14M9 21v-6h6v6M8 10h.01M12 10h.01M16 10h.01"/>'});
@@ -198,7 +198,7 @@ function paintDash(d){
   const t=d.totals,adm=S.user.role==='admin',pj=d.pjm||{aktif:[],total:0,menunggu:0,terlambat:0};
   if(d.pending!==undefined){S.pend=d.pending;bdg();}
   const kp=Object.entries(d.kondisi),tot=Math.max(1,kp.reduce((a,[,v])=>a+v.unit,0)),gm=Math.max(1,...d.perGedung.map(g=>g.unit));
-  const att=[adm&&d.pending&&['apv','check',d.pending,'persetujuan menunggu'],adm&&d.pengadaanBaru&&['pgd','cart',d.pengadaanBaru,'pengadaan diajukan'],
+  const att=[adm&&d.pending&&['apv','check',d.pending,'persetujuan menunggu'],adm&&d.pengadaanBaru&&['pgd','cart',d.pengadaanBaru,'pengadaan diajukan'],adm&&d.penghapusanBaru&&['hps','arch',d.penghapusanBaru,'penghapusan aset menunggu'],
     d.lowCount&&['brg','warn',d.lowCount,'barang stok menipis',1],canE()&&pj.menunggu&&['pjm','pjm',pj.menunggu,'peminjaman menunggu'],pj.terlambat&&['pjm','clock',pj.terlambat,'peminjaman terlambat',1]].filter(Boolean);
   const kpi=[['box','Jenis barang',num(t.jenis)],['stok','Total unit',num(t.unit)],['coin','Nilai aset',rp(t.nilai)],['build','Gedung / ruangan',t.gedung+' / '+t.ruangan]];
   M(`<section class="hero"><div><small>${sal()}, ${esc(S.user.name)}</small><h2>Ringkasan inventaris</h2><p>${new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p></div>
@@ -225,7 +225,7 @@ async function vDash(){
 const low=b=>b.minStok>0&&b.jumlah<=b.minStok;
 const card=b=>`<article class="cd it"><div class="m"><b>${esc(b.nama)}</b><br><small>${esc(b.kode)} · ${esc(loc(b.ruanganId))}${b.merk?' · '+esc(b.merk):''}</small>
 <div class="tg">${kb(b.kondisi)}<span class="bd">${num(b.jumlah)} ${esc(b.satuan)}</span>${b.sumber?`<span class="bd" style="background:#3b82f626;color:#3b82f6">${esc(b.sumber)}</span>`:''}<small>${rp((+b.harga||0)*(+b.jumlah||0))}</small>${low(b)?'<span class="bd" style="background:#f59e0b30;color:#b45309">Stok menipis</span>':''}</div></div>
-${canE()?`<div class="ac">${[['e','edit','Edit'],['s','stok','Ubah stok'],['p','split','Pisah kondisi'],['q','qr','Label QR'],['d','trash',S.user.role==='admin'?'Hapus':'Ajukan hapus']].map(([a,i,t])=>`<button class="ib" data-a="${a}" data-id="${b.id}" title="${t}" aria-label="${t}">${I(i)}</button>`).join('')}</div>`:''}</article>`;
+${canE()?`<div class="ac">${[['e','edit','Edit'],['s','stok','Ubah stok'],['p','split','Pisah kondisi'],['q','qr','Label QR'],['w','arch','Penghapusan aset'],['d','trash',S.user.role==='admin'?'Hapus':'Ajukan hapus']].map(([a,i,t])=>`<button class="ib" data-a="${a}" data-id="${b.id}" title="${t}" aria-label="${t}">${I(i)}</button>`).join('')}</div>`:''}</article>`;
 function vBrg(){
   const f=S.f;
   M(`<div class="hd"><h2>Barang</h2>${canE()?`<button class="btn" id="add">${I('plus')} Barang</button>`:''}</div>
@@ -242,7 +242,7 @@ function vBrg(){
   $('#fr').onchange=e=>set('ruanganId',e.target.value);$('#fk').onchange=e=>set('kondisi',e.target.value);$('#fc').onchange=e=>set('kategori',e.target.value);
   $('#fs').onchange=e=>{[f.sort,f.dir]=e.target.value.split(':');f.page=1;loadB();};
   if($('#add'))$('#add').onclick=()=>formB();
-  $('#lst').onclick=e=>{const b=e.target.closest('[data-a]');if(!b)return;const x=S.rows.find(r=>r.id===b.dataset.id);({e:formB,s:formS,p:formP,q:formQ,d:formD})[b.dataset.a](x);};
+  $('#lst').onclick=e=>{const b=e.target.closest('[data-a]');if(!b)return;const x=S.rows.find(r=>r.id===b.dataset.id);({e:formB,s:formS,p:formP,q:formQ,w:formHps,d:formD})[b.dataset.a](x);};
   $('#pg').onclick=e=>{const b=e.target.closest('[data-p]');if(b){f.page+=+b.dataset.p;loadB();scrollTo(0,0);}};
   return loadB();
 }
@@ -283,7 +283,7 @@ function formP(b){
 }
 function formD(b){
   const adm=S.user.role==='admin';
-  modal(adm?'Hapus barang':'Ajukan penghapusan',`<p>${adm?'Hapus permanen':'Ajukan penghapusan ke admin untuk'} <b>${esc(b.nama)}</b> (${esc(b.kode)})?</p>`,
+  modal(adm?'Hapus barang':'Ajukan penghapusan',`<p>${adm?'Hapus permanen':'Ajukan penghapusan ke admin untuk'} <b>${esc(b.nama)}</b> (${esc(b.kode)})?</p><p class="mu" style="font-size:13px">Pilihan ini untuk <b>salah input</b> dan tidak meninggalkan arsip. Untuk barang rusak, hilang, dijual, atau dihibahkan gunakan ikon <b>Penghapusan aset</b> agar tercatat dengan Berita Acara.</p>`,
   async()=>{const r=await api('deleteBarang',null,{id:b.id});dlg.close();toast(r.pending?'Pengajuan dikirim ke admin':'Barang dihapus');loadB();},adm?'Hapus':'Kirim pengajuan');
 }
 
@@ -422,6 +422,7 @@ P.cam='<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>';
 P.qr='<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2v6h-4M14 18h2"/>';
 P.cart='<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h3l3 12h10l2-8H7"/>';
 P.menu='<path d="M4 6h16M4 12h16M4 18h16"/>';
+P.arch='<path d="M3 4h18v4H3zM5 8v12h14V8M10 12h4"/>';
 $('#scan').innerHTML=I('cam');
 const kat1=id=>S.meta.kategoriInfo.find(k=>k.id===id);
 const subNama=id=>{for(const l of Object.values(S.meta.sub))for(const x of l)if(x.id===id)return x.nama;return '';};
@@ -537,6 +538,71 @@ function openScan(t){
 }
 function openHash(){const h=location.hash;if(/^#[kr]=/.test(h)){history.replaceState(null,'',location.pathname+location.search);openScan(h);}}
 
+/* ---------- penghapusan aset ---------- */
+const HA=[['rusak_berat','Rusak berat'],['hilang','Hilang / dicuri'],['usang','Usang / tidak layak pakai'],['habis_pakai','Habis pakai / kedaluwarsa'],['dijual','Dijual / dilelang'],['hibah','Dihibahkan'],['musnah','Dimusnahkan'],['lainnya','Lainnya']];
+const HAL=Object.fromEntries(HA),HC={diajukan:'#f59e0b',disetujui:'#10b981',ditolak:'#ef4444',batal:'#6b7280'};
+const tglId=d=>d?new Date(String(d).slice(0,10)+'T00:00').toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'}):'';
+S.hf={};
+async function vHps(){
+  M('<div class="cd mu">Memuat…</div>');
+  const f=S.hf,r=await api('listPenghapusan',{status:f.status||undefined,tahun:f.tahun||undefined}),adm=S.user.role==='admin';S.hp=r.items;
+  M(`<div class="noprint"><div class="hd"><h2>Penghapusan aset</h2>${canE()?`<button class="btn" data-h="new">${I('plus')} Ajukan</button>`:''}</div>
+  <div class="fl">${selH('hs','Semua status',[['diajukan','Menunggu'],['disetujui','Disetujui'],['ditolak','Ditolak'],['batal','Batal']],f.status)}${selH('ht','Semua tahun',r.tahun.map(y=>[y,y]),f.tahun)}</div>
+  <div class="gr" style="margin-bottom:.8rem"><div class="cd st"><span>Aset dihapus</span><b>${num(r.ringkas.catatan)} catatan</b></div><div class="cd st"><span>Total unit</span><b>${num(r.ringkas.unit)}</b></div><div class="cd st"><span>Nilai buku dihapus</span><b>${rp(r.ringkas.nilaiBuku)}</b></div></div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem"><button class="btn g" data-h="list" ${r.ringkas.catatan?'':'disabled'}>Cetak daftar yang disetujui</button></div>
+  ${r.items.map(x=>`<div class="cd it"><div class="m"><b>${esc(x.nama)}</b> <span class="bd">${num(x.jumlah)} ${esc(x.satuan)}</span><br>
+  <small>${esc(x.kode)} · ${esc(x.lokasi)} · ${esc(HAL[x.alasan]||x.alasan)}${x.tujuan?' → '+esc(x.tujuan):''}</small><br>
+  <small>${esc(tglId(x.tglPenghapusan))} · nilai buku ${rp(x.nilaiBuku)} · diajukan ${esc(x.requestedBy)}${x.noBA?' · '+esc(x.noBA):''}${x.note?' · '+esc(x.note):''}</small>${x.keterangan?`<br><small>${esc(x.keterangan)}</small>`:''}
+  <div class="tg"><span class="bd" style="background:${HC[x.status]}26;color:${HC[x.status]}">${esc(x.status)}</span></div></div>
+  <div class="ac">${adm&&x.status==='diajukan'?`<button class="btn" data-h="ok" data-id="${x.id}">Setujui</button><button class="btn g" data-h="no" data-id="${x.id}">Tolak</button>`:''}${x.status==='diajukan'&&(adm||x.requestedBy===S.user.username)&&S.user.role!=='viewer'&&!adm?`<button class="btn g" data-h="bt" data-id="${x.id}">Batalkan</button>`:''}${x.status==='disetujui'?`<button class="btn g" data-h="ba" data-id="${x.id}">Cetak BA</button>`:''}</div></div>`).join('')||'<div class="cd mu">Belum ada catatan penghapusan.</div>'}</div><div id="rpt" hidden></div>`);
+  $('#hs').onchange=e=>{S.hf.status=e.target.value||undefined;vHps();};$('#ht').onchange=e=>{S.hf.tahun=e.target.value||undefined;vHps();};
+  $('#main').onclick=ev=>{const b=ev.target.closest('[data-h]');if(!b)return;const a=b.dataset.h,x=(S.hp||[]).find(i=>i.id===b.dataset.id);
+    ({new:pickHps,ok:()=>decHps(x,1),no:()=>decHps(x,0),bt:()=>batalHps(x),ba:()=>cetakBA(x),list:cetakDaftarH})[a]();};
+}
+function pickHps(){
+  dlg.innerHTML=`<h3>Pilih aset yang dihapus</h3><input id="hq" type="search" placeholder="Cari nama, kode, merk…" autocomplete="off"><div id="hr" style="margin-top:.6rem;max-height:50vh;overflow:auto"></div><button type="button" class="btn g" style="width:100%;margin-top:.6rem" data-x>Tutup</button>`;
+  dlg.oncancel=null;dlg.onclick=null;dlg.querySelector('[data-x]').onclick=()=>dlg.close();
+  let list=[],dt,n=0;
+  const run=async q=>{const k=++n;const r=await api('listBarang',{q,page:1,pageSize:15,sort:'nama',dir:'asc'});if(k!==n)return;list=ex(r.data);
+    $('#hr').innerHTML=list.map(b=>`<button type="button" class="btn g" style="width:100%;justify-content:space-between;margin-bottom:.4rem;text-align:left" data-id="${b.id}"><span>${esc(b.nama)}<br><small>${esc(b.kode)} · ${esc(loc(b.ruanganId))}</small></span><b>${num(b.jumlah)}</b></button>`).join('')||'<span class="mu">Tidak ada hasil.</span>';};
+  $('#hq').oninput=e=>{clearTimeout(dt);dt=setTimeout(()=>run(e.target.value.trim()).catch(x=>toast(x.message,1)),300);};
+  $('#hr').onclick=e=>{const b=e.target.closest('[data-id]');if(b)formHps(list.find(x=>x.id===b.dataset.id));};
+  if(!dlg.open)dlg.showModal();run('').catch(x=>toast(x.message,1));
+}
+function formHps(b){
+  const adm=S.user.role==='admin',da={hilang:'hilang',rusak_berat:'rusak_berat',habis_pakai:'habis_pakai'}[b.kondisi]||'rusak_berat';
+  modal('Penghapusan aset',`<p style="margin:0"><b>${esc(b.nama)}</b><br><small>${esc(b.kode)} · ${esc(loc(b.ruanganId))} · stok ${num(b.jumlah)} ${esc(b.satuan)} · kondisi ${esc(KL[b.kondisi]||b.kondisi)}</small></p>
+  ${fld('Jumlah yang dihapus*','jumlah',b.jumlah,'number',`required min=1 max=${b.jumlah} step=1 inputmode=numeric`)}${sel('Alasan*','alasan',HA,da)}
+  ${fld('Tujuan / penerima (bila dijual atau dihibahkan)','tujuan','','text','maxlength=120')}${fld('Tanggal penghapusan','tglPenghapusan',new Date().toISOString().slice(0,10),'date')}
+  <label>Keterangan</label><textarea name="keterangan" rows="2" maxlength="300"></textarea>
+  <p class="mu" style="font-size:13px;margin:.6rem 0 0">${adm?'Sebagai admin, penghapusan langsung berlaku dan nomor Berita Acara dibuat otomatis.':'Pengajuan akan diperiksa admin. Stok baru berkurang setelah disetujui.'}</p>`,
+  async fd=>{const r=await api('ajukanPenghapusan',{...Object.fromEntries(fd),barangId:b.id});dlg.close();
+    toast(r.langsung?'Aset dihapus · '+r.noBA:'Pengajuan penghapusan dikirim ke admin');if(S.tab==='brg')loadB();else if(S.tab==='hps')vHps();},adm?'Hapus aset':'Kirim pengajuan');
+}
+function decHps(x,ok){
+  modal(ok?'Setujui penghapusan':'Tolak penghapusan',`<p class="mu" style="margin:0">${esc(x.nama)} · ${num(x.jumlah)} ${esc(x.satuan)} · ${esc(HAL[x.alasan]||x.alasan)}</p>${ok?'<p style="font-size:13px">Stok barang akan dikurangi. Bila habis, barang dikeluarkan dari daftar aset aktif dan arsipnya tetap tersimpan di sini.</p>':''}`+fld('Catatan (opsional)','note','','text','maxlength=200'),
+  async fd=>{const r=await api('decidePenghapusan',{id:x.id,approve:!!ok,note:fd.get('note')});dlg.close();toast(r.status==='batal'?'Dibatalkan: barang sudah tidak ada':ok?'Disetujui · '+r.noBA:'Ditolak');vHps();},ok?'Setujui':'Tolak');
+}
+function batalHps(x){modal('Batalkan pengajuan',`<p>Batalkan pengajuan penghapusan <b>${esc(x.nama)}</b>?</p>`,async()=>{await api('batalPenghapusan',{id:x.id});dlg.close();toast('Pengajuan dibatalkan');vHps();},'Batalkan');}
+const kopH=()=>{const s=S.meta.settings;return `<div class="kop"><img src="${esc(s.logoUrl||'logo.jpg')}" alt=""><div><b style="font-size:1.15rem">${esc(s.instansiNama)}</b>${s.instansiUnit?'<br>'+esc(s.instansiUnit):''}<br><small>${esc(s.alamat)}${s.kontak?' · '+esc(s.kontak):''}</small></div></div>`;};
+function tampilCetak(h){const r=$('#rpt');r.innerHTML=h;r.hidden=false;r.scrollIntoView({behavior:'smooth'});setTimeout(()=>print(),350);}
+function cetakBA(x){
+  const s=S.meta.settings,row=(l,v)=>`<tr><td style="width:34%"><b>${l}</b></td><td>${v}</td></tr>`;
+  tampilCetak(`${kopH()}<h3 style="text-align:center;margin:.9rem 0 .1rem">BERITA ACARA PENGHAPUSAN ASET</h3><p style="text-align:center;margin:0 0 .8rem">Nomor: ${esc(x.noBA)}</p>
+  <p>Pada tanggal ${esc(tglId(x.tglPenghapusan))}, aset berikut dihapus dari daftar inventaris ${esc(s.instansiNama)} dengan data sebagai berikut:</p>
+  <table>${row('Kode aset',esc(x.kode))+row('Nama aset',esc(x.nama))+row('Kategori',esc(x.kategori))+row('Lokasi',esc(x.lokasi))+row('Jumlah',num(x.jumlah)+' '+esc(x.satuan))+row('Kondisi saat dihapus',esc(KL[x.kondisi]||x.kondisi))+row('Tanggal perolehan',esc(tglId(x.tglPerolehan))||'-')+row('Harga satuan',rp(x.hargaSatuan))+row('Nilai perolehan',rp(x.nilaiPerolehan))+row('Nilai buku',rp(x.nilaiBuku))+row('Alasan penghapusan',esc(HAL[x.alasan]||x.alasan))+row('Tujuan / penerima',esc(x.tujuan)||'-')+row('Keterangan',esc(x.keterangan)||'-')}</table>
+  <p style="font-size:12px">Nilai buku dihitung garis lurus dari umur ekonomis kategori; kategori tanpa umur ekonomis dicatat sebesar nilai perolehan.</p>
+  <div class="ttd"><div>Pengaju,<br><br><br><br><u>${esc(x.requestedBy)}</u></div><div>Mengetahui,<br>${esc(s.mengetahuiJabatan)}<br><br><br><u>${esc(s.mengetahuiNama||'……………………')}</u></div><div>${esc(s.kota||'……………')}, ${esc(tglId(x.tglPenghapusan))}<br>Menyetujui,<br><br><br><u>${esc(x.decidedBy)}</u></div></div>`);
+}
+function cetakDaftarH(){
+  const rows=(S.hp||[]).filter(x=>x.status==='disetujui').sort((a,b)=>String(a.tglPenghapusan).localeCompare(String(b.tglPenghapusan))),tot=rows.reduce((a,x)=>a+(+x.nilaiBuku||0),0),un=rows.reduce((a,x)=>a+(+x.jumlah||0),0);
+  tampilCetak(`${kopH()}<h3 style="text-align:center;margin:.9rem 0 .1rem">DAFTAR PENGHAPUSAN ASET</h3><p style="text-align:center;margin:0 0 .8rem">${S.hf.tahun?'Tahun '+esc(S.hf.tahun):'Semua tahun'} · per ${esc(tglId(new Date().toISOString()))}</p>
+  <table><thead><tr><th>No</th><th>No. BA</th><th>Tanggal</th><th>Kode</th><th>Nama aset</th><th>Lokasi</th><th class="r">Jml</th><th>Alasan</th><th class="r">Nilai buku</th></tr></thead><tbody>
+  ${rows.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.noBA)}</td><td>${esc(x.tglPenghapusan)}</td><td>${esc(x.kode)}</td><td>${esc(x.nama)}</td><td>${esc(x.lokasi)}</td><td class="r">${num(x.jumlah)}</td><td>${esc(HAL[x.alasan]||x.alasan)}${x.tujuan?' ('+esc(x.tujuan)+')':''}</td><td class="r">${num(x.nilaiBuku)}</td></tr>`).join('')}
+  <tr><th colspan="6">Total</th><th class="r">${num(un)}</th><th></th><th class="r">${num(tot)}</th></tr></tbody></table>
+  <div class="ttd"><div></div><div>${esc(S.meta.settings.kota||'……………')}, ${esc(tglId(new Date().toISOString()))}<br>Pelapor,<br><br><br><br><u>${esc(S.user.name)}</u></div></div>`);
+}
+
 /* ---------- mulai ---------- */
 (async()=>{
   const t=stor().getItem('sp_tok');if(!t||API.startsWith('GANTI')||location.hash==='#pinjam')return;
@@ -620,7 +686,7 @@ function decide(x,ok){
 }
 function kembali(x){
   modal('Pengembalian: '+x.nama,sel('Kondisi setelah dipinjam','kondisi',['baik','rusak_ringan','rusak_berat','hilang'].map(k=>[k,KL[k]]),'baik')+`<label>Catatan kondisi</label><textarea name="catatan" rows="3" maxlength="300" placeholder="Mis. layar tergores, kabel hilang satu"></textarea>`,
-    async fd=>{await api('pinjamKembali',{id:x.id,kondisi:fd.get('kondisi'),catatan:fd.get('catatan')});dlg.close();toast('Pengembalian dicatat');vPjm();},'Catat pengembalian');
+    async fd=>{const r=await api('pinjamKembali',{id:x.id,kondisi:fd.get('kondisi'),catatan:fd.get('catatan')});dlg.close();toast(r.noBA?'Pengembalian dicatat · masuk Penghapusan Aset '+r.noBA:'Pengembalian dicatat');vPjm();},'Catat pengembalian');
 }
 
 /* halaman peminjaman */
