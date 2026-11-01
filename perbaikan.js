@@ -167,6 +167,31 @@ paintDash = function (d) {
   };
 };
 
+/* ===== 2b. GEDUNG & RUANGAN: tahun, masa pakai, luas ===== */
+const f3 = o => `<div class="r2"><div>${fld('Tahun dibangun', 'tahun', o.tahun, 'number', 'min=1800 step=1 inputmode=numeric')}</div><div>${fld('Masa pakai (tahun)', 'masaPakai', o.masaPakai, 'number', 'min=0 max=200 step=1 inputmode=numeric')}</div></div>${fld('Luas (m²)', 'luas', o.luas, 'number', 'min=0 step=any inputmode=decimal')}`;
+formG = function (id) {
+  const g = id ? gM.get(id) : {};
+  modal(id ? 'Edit gedung' : 'Tambah gedung', fld('Kode*', 'kode', g.kode, 'text', 'required maxlength=20') + fld('Nama*', 'nama', g.nama, 'text', 'required maxlength=100') + f3(g) +
+    `<label>Keterangan</label><textarea name="keterangan" rows="2">${esc(g.keterangan)}</textarea>`,
+    async fd => { await api('saveGedung', { ...Object.fromEntries(fd), id }); dlg.close(); await reM(); toast('Gedung tersimpan'); vKel(); });
+};
+formR = function (id, gid) {
+  const r = id ? rM.get(id) : { gedungId: gid };
+  modal(id ? 'Edit ruangan' : 'Tambah ruangan', sel('Gedung*', 'gedungId', S.g.map(g => [g.id, g.kode + ' — ' + g.nama]), r.gedungId) + fld('Kode*', 'kode', r.kode, 'text', 'required maxlength=30') +
+    fld('Nama*', 'nama', r.nama, 'text', 'required maxlength=100') + fld('Penanggung jawab', 'penanggungJawab', r.penanggungJawab) + fld('Lantai', 'lantai', r.lantai) + f3(r),
+    async fd => { await api('saveRuangan', { ...Object.fromEntries(fd), id }); dlg.close(); await reM(); toast('Ruangan tersimpan'); vKel(); });
+};
+const sisaPakai = o => { const t = +o.tahun, m = +o.masaPakai; if (!t || !m) return ''; const s = t + m - new Date().getFullYear(); return s >= 0 ? 'sisa ' + s + ' th' : 'lewat masa pakai ' + (-s) + ' th'; };
+const infoUkur = (o, ...x) => [...x, o.tahun && 'Dibangun ' + o.tahun, o.masaPakai && 'Masa pakai ' + o.masaPakai + ' th', sisaPakai(o), +o.luas && num(o.luas) + ' m²'].filter(Boolean).map(esc).join(' · ');
+sLok = function () {
+  const adm = S.user.role === 'admin', tl = S.g.reduce((a, g) => a + (+g.luas || 0), 0);
+  $('#sub').innerHTML = `<div class="hd"><span class="mu">${S.g.length} gedung · ${S.r.length} ruangan${tl ? ' · luas gedung ' + num(tl) + ' m²' : ''}</span><button class="btn" data-k="addG">${I('plus')} Gedung</button></div>` +
+    (S.g.map(g => `<div class="cd" style="margin-bottom:.7rem"><div class="it"><div class="m"><b>${esc(g.kode)} — ${esc(g.nama)}</b><br><small>${infoUkur(g, g.keterangan)}</small></div>
+    <div class="ac">${kib('addR', g.id, 'plus', 'Tambah ruangan')}${kib('editG', g.id, 'edit', 'Edit gedung')}${adm ? kib('delG', g.id, 'trash', 'Hapus gedung') : ''}</div></div>
+    ${S.r.filter(r => r.gedungId === g.id).map(r => `<div class="it" style="border-top:1px solid var(--bd);padding-top:.5rem;margin:0"><div class="m">${esc(r.kode)} — ${esc(r.nama)}<br><small>${infoUkur(r, r.lantai && 'Lantai ' + r.lantai, r.penanggungJawab && 'PJ: ' + r.penanggungJawab)}</small></div>
+    <div class="ac">${kib('editR', r.id, 'edit', 'Edit ruangan')}${adm ? kib('delR', r.id, 'trash', 'Hapus ruangan') : ''}</div></div>`).join('') || '<small class="mu">Belum ada ruangan. Tekan + untuk menambah.</small>'}</div>`).join('') || '<div class="cd mu">Belum ada gedung. Tambahkan gedung pertama.</div>');
+};
+
 /* ===== 3. MENU BERKELOMPOK ===== */
 const NAV = [['dash', 'Beranda', 'dash', 'Utama', 1], ['brg', 'Aset', 'box', 'Utama', 1], ['pjm', 'Peminjaman', 'pjm', 'Utama', 1],
   ['apv', 'Persetujuan', 'check', 'Kelola'], ['pgd', 'Pengadaan', 'cart', 'Kelola'], ['hps', 'Penghapusan', 'arch', 'Kelola'], ['kel', 'Data Master', 'cog', 'Kelola'],
